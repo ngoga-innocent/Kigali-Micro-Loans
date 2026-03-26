@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.utils.timezone import now
-from datetime import timedelta
+from datetime import timedelta,date
 
 from loans.models import Loan
 from users.utils import send_email
@@ -79,17 +79,16 @@ class Command(BaseCommand):
 
                 penalty_applied = False
 
-                # 📅 Apply penalty ONLY once per month
-                if (
-                    loan.last_penalty_date is None
-                    or (loan.last_penalty_date.year, loan.last_penalty_date.month)
-                    != (today.year, today.month)
-                ):
+                today = date.today()
+
+                # Apply penalty DAILY (once per day)
+                if loan.last_penalty_date != today:
                     penalty = loan.remaining_balance * penalty_rate
 
                     loan.penalty_amount += penalty
                     loan.remaining_balance += penalty
                     loan.last_penalty_date = today
+                    loan.save()
 
                     penalty_applied = True
 
