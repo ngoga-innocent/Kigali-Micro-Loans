@@ -1,0 +1,37 @@
+<!-- templates/emails/loan_reminder.html -->
+{% extends "emails/base.html" %}
+
+{% block content %}
+
+<div class="title">Loan Repayment Reminder</div>
+
+<p class="text">
+  Dear {{ client_name }}, this is a reminder that your loan repayment is approaching.
+</p>
+
+<div class="card">
+  <div class="row">
+    <span class="label">Loan ID</span>
+    <span class="value">#{{ loan_id }}</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Due Date</span>
+    <span class="value">{{ due_date }}</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Remaining Balance</span>
+    <span class="value">{{ balance }} RWF</span>
+  </div>
+</div>
+
+<p class="text">
+  Please ensure timely repayment to avoid penalties.
+</p>
+
+<a href="{{ payment_url }}" class="button">
+  Make Payment
+</a>
+
+{% endblock %}

@@ -1,0 +1,37 @@
+<!-- templates/emails/loan_status_update.html -->
+{% extends "emails/base.html" %}
+
+{% block content %}
+
+<div class="title">Loan Status Update</div>
+
+<p class="text">
+  Hello {{ client_name }}, your loan status has been updated.
+</p>
+
+<div class="card">
+  <div class="row">
+    <span class="label">Loan ID</span>
+    <span class="value">#{{ loan_id }}</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Status</span>
+    <span class="status {{ status }}">{{ status|title }}</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Remaining Balance</span>
+    <span class="value">{{ balance }} RWF</span>
+  </div>
+</div>
+
+<p class="text">
+  Stay on track to maintain a strong credit profile.
+</p>
+
+<a href="{{ dashboard_url }}" class="button">
+  View Loan Details
+</a>
+
+{% endblock %}

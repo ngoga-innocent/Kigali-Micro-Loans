@@ -1,0 +1,37 @@
+<!-- templates/emails/loan_overdue.html -->
+{% extends "emails/base.html" %}
+
+{% block content %}
+
+<div class="title" style="color:#b91c1c;">Payment Overdue</div>
+
+<p class="text">
+  Dear {{ client_name }}, your loan payment is now overdue.
+</p>
+
+<div class="card">
+  <div class="row">
+    <span class="label">Loan ID</span>
+    <span class="value">#{{ loan_id }}</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Due Date</span>
+    <span class="value">{{ due_date }}</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Outstanding Balance</span>
+    <span class="value">{{ balance }} RWF</span>
+  </div>
+</div>
+
+<p class="text">
+  Immediate action is required to avoid penalties or service interruption.
+</p>
+
+<a href="{{ payment_url }}" class="button" style="background:#dc2626;">
+  Make Payment Now
+</a>
+
+{% endblock %}
