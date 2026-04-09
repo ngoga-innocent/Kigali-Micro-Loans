@@ -1,6 +1,8 @@
 from rest_framework import serializers
-from .models import Loan,LoanType,LoanApplication,LoanPayment,RepaymentSchedule
+from .models import Loan,LoanType,LoanApplication,LoanPayment,RepaymentSchedule,PublicLoanApplication,Client
 from clients.serializers import ClientSerializer
+from datetime import timedelta
+from decimal import Decimal
 class LoanTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanType
@@ -91,3 +93,87 @@ class LoanSerializer(serializers.ModelSerializer):
         fields = "__all__"
     def get_total_due(self, obj):
         return obj.total_repayment + obj.penalty_amount
+class AdminCreateLoanSerializer(serializers.ModelSerializer):
+    interest_rate = serializers.FloatField(write_only=True)
+    duration_days = serializers.IntegerField(write_only=True)
+    interest_rate = serializers.DecimalField(max_digits=5, decimal_places=2, write_only=True)
+    class Meta:
+        model = Loan
+        fields = [
+            "client",
+            "loan_type",
+            "loan_amount",
+            "interest_rate",
+            "duration_days",
+            "disbursement_date",
+        ]
+
+    def create(self, validated_data):
+        interest_rate = validated_data.pop("interest_rate")
+        duration_days = validated_data.pop("duration_days")
+
+        loan_amount = validated_data["loan_amount"]
+
+        # ✅ Calculate interest
+        interest_amount = loan_amount * (interest_rate / Decimal("100"))
+
+        # ✅ Total repayment
+        total_repayment = loan_amount + interest_amount
+
+        # ✅ Dates
+        disbursement_date = validated_data["disbursement_date"]
+        repayment_due_date = disbursement_date + timedelta(days=duration_days)
+
+        return Loan.objects.create(
+            **validated_data,
+            interest_amount=interest_amount,
+            total_repayment=total_repayment,
+            remaining_balance=total_repayment,
+            repayment_due_date=repayment_due_date,
+            status="active",
+        )
+    def validate(self, data):
+        if data["loan_amount"] <= 0:
+            raise serializers.ValidationError("Loan amount must be positive")
+
+        if data["interest_rate"] <= 0:
+            raise serializers.ValidationError("Interest rate must be greater than 0")
+
+        return data
+class PublicLoanApplicationSerializer(serializers.ModelSerializer):
+    loan_type_details = serializers.SerializerMethodField()
+    class Meta:
+        model = PublicLoanApplication
+        fields = "__all__"
+        read_only_fields = ["status", "reviewed_by"]
+    def get_loan_type_details(self, obj):
+        if obj.loan_type:
+            return LoanTypeSerializer(obj.loan_type).data
+        return {}
+    def validate(self, data):
+        loan_type = data.get("loan_type")
+        amount = data.get("requested_amount")
+        email = data.get("email")
+        # ✅ Validate loan amount range
+        if loan_type and amount:
+            if amount < loan_type.min_amount or amount > loan_type.max_amount:
+                raise serializers.ValidationError(
+                    f"Amount must be between {loan_type.min_amount} and {loan_type.max_amount}"
+                )
+
+        # ✅ Prevent duplicate applications
+        national_id = data.get("national_id")
+        if PublicLoanApplication.objects.filter(
+            national_id=national_id, status="pending"
+        ).exists():
+            raise serializers.ValidationError(
+                "You already have a pending application."
+            )
+          # replace with your actual client model
+
+        if email and Client.objects.filter(email=email).exists():
+            raise serializers.ValidationError(
+                "A client with this email already exists. Please log in to proceed."
+            )
+
+        return data

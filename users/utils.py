@@ -40,7 +40,7 @@ def send_credentials_email(email, password):
 
     html_content = render_to_string(
         "emails/credentials.html",
-        {"email": email, "password": password}
+        {"email": email, "password": password,"dashboard_url": f"{settings.FRONTEND_URL}/dashboard"},
     )
 
     msg = EmailMultiAlternatives(

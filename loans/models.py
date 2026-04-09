@@ -84,12 +84,15 @@ class Loan(models.Model):
         ('overdue', 'Overdue'),
         ('defaulted', 'Defaulted'),
         ('paid', 'Paid Off'),
+        ('reloaned', 'Reloaned'),
     )
 
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     loan_type = models.ForeignKey(LoanType, on_delete=models.SET_NULL, null=True)
     application = models.OneToOneField(LoanApplication, on_delete=models.SET_NULL, null=True)
-
+    parent_loan = models.ForeignKey(
+    "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="reloans"
+)
     loan_amount = models.DecimalField(max_digits=12, decimal_places=2)
     interest_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
@@ -121,7 +124,9 @@ class Loan(models.Model):
         
 
         super().save(*args, **kwargs)
-
+    def is_eligible_for_reloan(self):
+        paid_amount = self.total_repayment - self.remaining_balance
+        return paid_amount >= self.interest_amount
     def __str__(self):
         return f"Loan #{self.id} - {self.client}"
 class RepaymentSchedule(models.Model):
@@ -166,3 +171,52 @@ class LoanPayment(models.Model):
 
     def __str__(self):
         return f"{self.loan} - {self.amount_paid}"
+class PublicLoanApplication(models.Model):
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("reviewed", "Reviewed"),
+        ("converted", "Converted"),
+        ("rejected", "Rejected"),
+    )
+
+    loan_type = models.ForeignKey(LoanType, on_delete=models.SET_NULL,null=True,blank=True)
+    requested_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # 👤 Personal Info
+    full_name = models.CharField(max_length=255)
+    phone = models.CharField(max_length=20)
+    email = models.EmailField(blank=True, null=True)
+    national_id = models.CharField(max_length=50)
+
+    gender = models.CharField(max_length=20)
+    marital_status = models.CharField(max_length=20)
+
+    # 📍 Address
+    district = models.CharField(max_length=100)
+    sector = models.CharField(max_length=100)
+    cell = models.CharField(max_length=100)
+    village = models.CharField(max_length=100)
+
+    # 💼 Employment
+    employer = models.CharField(max_length=255, blank=True)
+    position = models.CharField(max_length=100, blank=True)
+    supervisor = models.CharField(max_length=255, blank=True)
+    employer_phone = models.CharField(max_length=20, blank=True)
+    salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    loan_words = models.CharField(max_length=255, blank=True)
+
+    signature = models.CharField(max_length=255)
+    application_date = models.DateField(auto_now_add=True)
+    id_document = models.FileField(upload_to="documents/id/",null=True,blank=True)
+    job_contract = models.FileField(upload_to="documents/job/",null=True,blank=True)
+    bank_statement = models.FileField(upload_to="documents/bank/",null=True,blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    comment = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.full_name} - {self.requested_amount}"

@@ -11,8 +11,8 @@ from rest_framework import status
 from django.db.models import Q
 from rest_framework.permissions import AllowAny
 from .models import LoanType
-from .serializers import LoanTypeSerializer,LoanApplicationSerializer,LoanPaymentSerializer
-from users.permissions import IsAdminOrManager
+from .serializers import LoanTypeSerializer,LoanApplicationSerializer,LoanPaymentSerializer,AdminCreateLoanSerializer
+from users.permissions import IsAdminOrManager,IsAdminOrManagerOrReadOnlyReviewer
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
@@ -30,10 +30,11 @@ from dateutil.relativedelta import relativedelta
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncMonth
 from django.utils.dateparse import parse_date
+from clients.serializers import CreateClientSerializer
+from .models import Loan, LoanApplication, LoanPayment, RepaymentSchedule,PublicLoanApplication
+from .serializers import LoanSerializer, LoanPaymentSerializer,PublicLoanApplicationSerializer
 
-from .models import Loan, LoanApplication, LoanPayment, RepaymentSchedule
-from .serializers import LoanSerializer, LoanPaymentSerializer
-
+from django.contrib.auth import get_user_model
 
 from datetime import timedelta
 from django.utils import timezone
@@ -43,7 +44,12 @@ from django.db.models.functions import TruncMonth
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.http import HttpResponse
+from rest_framework.decorators import action
+import mimetypes
 
+
+User=get_user_model()
 class DashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -383,6 +389,22 @@ class LoanListView(generics.ListAPIView):
 class CreateLoanView(generics.CreateAPIView):
     queryset = Loan.objects.all()
     serializer_class = LoanSerializer
+class LoanViewSet(ModelViewSet):
+    queryset = Loan.objects.all().order_by("-created_at")
+    serializer_class = LoanSerializer
+
+    @action(detail=False, methods=["post"], url_path="create-manual")
+    def create_manual(self, request):
+        serializer = AdminCreateLoanSerializer(data=request.data)
+
+        if serializer.is_valid():
+            loan = serializer.save()
+            return Response(
+                LoanSerializer(loan).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class LoanApplicationViewSet(ModelViewSet):
     queryset = LoanApplication.objects.all().order_by("-created_at")
     serializer_class = LoanApplicationSerializer
@@ -566,6 +588,7 @@ class LoanApplicationViewSet(ModelViewSet):
                     loan_type=loan_type,
                     application=application,
                     loan_amount=amount,
+                    remaining_balance=total_repayment,
                     total_repayment=total_repayment,
                     interest_amount=interest,
                     disbursement_date=disbursement_date,
@@ -739,3 +762,203 @@ class LoanPaymentViewSet(ModelViewSet):
             return Response({"message": "Payment approved and applied successfully"})
 
         return Response({"error": "Invalid action"}, status=400)
+class PublicLoanApplicationViewSet(ModelViewSet):
+    queryset = PublicLoanApplication.objects.all().order_by("-created_at")
+    serializer_class = PublicLoanApplicationSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        # 🚫 Public users should NOT see all applications
+        if self.request.user.role in ['admin','manager','reviewer']:
+            return super().get_queryset()
+        return PublicLoanApplication.objects.none()
+class AdminPublicLoanApplicationViewSet(ModelViewSet):
+    queryset = PublicLoanApplication.objects.all().order_by("-created_at")
+    serializer_class = PublicLoanApplicationSerializer
+    permission_classes = [IsAdminOrManagerOrReadOnlyReviewer]
+
+    # =========================
+    # UPDATE (Admin / Manager only)
+    # =========================
+    def update(self, request, *args, **kwargs):
+        if request.user.role not in ["admin", "manager"]:
+            return Response({"error": "Not allowed"}, status=403)
+        app = self.get_object()
+        if app.status == "converted":
+            return Response({"error": "Cannot edit converted application"}, status=400)    
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if request.user.role not in ["admin", "manager"]:
+            return Response({"error": "Not allowed"}, status=403)
+        app = self.get_object()
+        if app.status == "converted":
+            return Response({"error": "Cannot edit converted application"}, status=400)
+        return super().partial_update(request, *args, **kwargs)
+
+    # =========================
+    # REVIEW
+    # =========================
+    @action(detail=True, methods=["post"])
+    def review(self, request, pk=None):
+        if request.user.role not in ["admin", "manager"]:
+            return Response({"error": "Not allowed"}, status=403)
+
+        app = self.get_object()
+        app.status = "reviewed"
+        app.reviewed_by = request.user
+        app.save()
+
+        return Response({"message": "Application marked as reviewed"})
+
+    # =========================
+    # CONVERT → CLIENT + LOAN
+    # =========================
+    @action(detail=True, methods=["post"])
+    def convert(self, request, pk=None):
+        if request.user.role not in ["admin", "manager"]:
+            return Response({"error": "Not allowed"}, status=403)
+
+        app = self.get_object()
+
+        if app.status == "converted":
+            return Response({"error": "Already converted"}, status=400)
+
+        link_existing = request.data.get("link_existing") == "true"
+
+        try:
+            with transaction.atomic():
+
+                # =========================
+                # 🔍 CHECK EXISTING USER
+                # =========================
+                existing_user = User.objects.filter(email=app.email).first()
+                existing_client = None
+
+                if existing_user:
+                    existing_client = Client.objects.filter(user=existing_user).first()
+
+                # =========================
+                # 🚫 IF CLIENT EXISTS BUT NOT LINKING
+                # =========================
+                if existing_client and not link_existing:
+                    return Response(
+                        {"error": "Client already exists. Enable link existing to continue."},
+                        status=400
+                    )
+
+                # =========================
+                # ✅ USE EXISTING CLIENT
+                # =========================
+                if existing_client and link_existing:
+                    client = existing_client
+
+                    # 🔥 CHECK PENDING LOAN
+                    has_pending_loan = LoanApplication.objects.filter(
+                        client=client,
+                        status="pending"
+                    ).exists()
+
+                    if has_pending_loan:
+                        return Response(
+                            {"error": "Client already has a pending loan"},
+                            status=400
+                        )
+
+                # =========================
+                # ✅ CREATE NEW CLIENT
+                # =========================
+                else:
+                    client_data = {
+                        "names": app.full_name,
+                        "email": app.email,
+                        "phone": app.phone,
+                        "loan_type":app.loan_type,
+                        "id_number": app.national_id,
+                        "gender": app.gender,
+                        "marital_status": app.marital_status,
+                        "district": app.district,
+                        "sector": app.sector,
+                        "cell": app.cell,
+                        "village": app.village,
+                        "id_document": app.id_document,
+                        "job_contract": app.job_contract,
+                        "bank_statement": app.bank_statement,
+                    }
+
+                    serializer = CreateClientSerializer(data=client_data)
+                    serializer.is_valid(raise_exception=True)
+                    client = serializer.save()
+
+                # =========================
+                # ✅ CREATE LOAN APPLICATION
+                # =========================
+                loan_app = LoanApplication.objects.create(
+                    client=client,
+                    loan_type=app.loan_type,
+                    requested_amount=app.requested_amount,
+                    status="pending",
+                )
+
+                # =========================
+                # ✅ UPDATE PUBLIC APPLICATION
+                # =========================
+                app.status = "converted"
+                app.save()
+
+            return Response({
+                "message": "Converted successfully",
+                "client_id": client.id,
+                "loan_application_id": loan_app.id,
+                "linked": bool(existing_client and link_existing)
+            })
+
+        except Exception as e:
+            return Response({"detail": str(e)}, status=400)
+    # =========================
+    # REJECT
+    # =========================
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        if request.user.role not in ["admin", "manager"]:
+            return Response({"error": "Not allowed"}, status=403)
+
+        app = self.get_object()
+        app.status = "rejected"
+        app.reviewed_by = request.user
+        app.comment = request.data.get("comment", "")
+        app.save()
+
+        return Response({"message": "Application rejected"})
+    #===========================
+    # DOWNLOAD ID DOCUMENT
+    #===========================
+    
+
+
+    @action(detail=True, methods=["get"], url_path="view-file")
+    def view_file(self, request, pk=None):
+        app = self.get_object()
+        file_type = request.query_params.get("type")
+
+        file_map = {
+            "id": app.id_document,
+            "contract": app.job_contract,
+            "bank": app.bank_statement,
+        }
+
+        file = file_map.get(file_type)
+
+        if not file:
+            return Response({"error": "File not found"}, status=404)
+
+        file_path = file.path  # 🔥 IMPORTANT
+        mime_type, _ = mimetypes.guess_type(file_path)
+
+        with open(file_path, "rb") as f:
+            response = HttpResponse(f.read(), content_type=mime_type or "application/pdf")
+
+            # 🔥 THIS LINE FIXES YOUR ISSUE
+            response["Content-Disposition"] = f'inline; filename="{file.name}"'
+
+            return response

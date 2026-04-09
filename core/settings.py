@@ -5,6 +5,8 @@ from pathlib import Path
 # import ssl
 import certifi
 
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # ssl._create_default_https_context = ssl.create_default_context(
 #     cafile=certifi.where()
 # )

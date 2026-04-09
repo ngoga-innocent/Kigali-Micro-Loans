@@ -2,9 +2,12 @@ from django.core.management.base import BaseCommand
 from django.utils.timezone import now
 from datetime import timedelta,date
 
+from backend.loans.management.commands.reloan import process_reloan
 from loans.models import Loan
 from users.utils import send_email
-
+from django.conf import settings
+from .reloan import process_reloan
+payment_url = f"{settings.FRONTEND_URL}/payments"
 
 class Command(BaseCommand):
     help = "Loan reminders and overdue processing"
@@ -32,7 +35,7 @@ class Command(BaseCommand):
                 "loan_id": loan.id,
                 "due_date": due_date,
                 "balance": f"{loan.remaining_balance:,.0f}",
-                "payment_url": "https://app.kigalimicroloans.com/payments",
+                "payment_url": payment_url,
             }
 
             # 🔔 5 DAYS BEFORE
@@ -59,14 +62,19 @@ class Command(BaseCommand):
 
             # 🔔 DUE TODAY
             elif days_left == 0 and not loan.reminder_due_today_sent:
-                send_email(
-                    to_email=loan.client.email,
-                    subject="📌 Loan Payment Due Today",
-                    template_name="loans/loan_reminder.html",
-                    context=context,
-                )
-                loan.reminder_due_today_sent = True
-                stats["due_today"] += 1
+                if loan.is_eligible_for_reloan() and loan.status != "reloaned":
+                    process_reloan(loan)
+                    stats["overdue"] += 1
+                    continue  # 🚨 skip penalty logic
+                else:
+                    send_email(
+                        to_email=loan.client.email,
+                        subject="📌 Loan Payment Due Today",
+                        template_name="loans/loan_reminder.html",
+                        context=context,
+                    )
+                    loan.reminder_due_today_sent = True
+                    stats["due_today"] += 1
 
             # ⚠️ OVERDUE
             # ⚠️ OVERDUE

@@ -1,0 +1,12 @@
+{% extends "emails/base.html" %}
+{% block content %}
+  <div class="container">
+    <h2 class="reviewed">Loan Application Received</h2>
+    <p>Hi {{ name }},</p>
+    <p>We have successfully received your loan application of <strong>{{ amount }} RWF</strong> for <strong>{{ loan_type }}</strong>.</p>
+    <p>Our team will review your application and get back to you shortly.</p>
+    <p>You can track your application progress on your dashboard:</p>
+    <p><a href="{{ dashboard_url }}" class="btn">Go to Dashboard</a></p>
+    <p class="footer">If you did not submit this application, please contact our support immediately.</p>
+  </div>
+{% endblock %}

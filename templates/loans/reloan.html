@@ -1,0 +1,45 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+
+<h2 class="title">🔁 Loan Restructured</h2>
+
+<p class="text">
+  Hi {{ name }},
+</p>
+
+<p class="text">
+  Your loan has been successfully restructured based on your repayment progress.
+  The remaining balance has been converted into a new loan with updated terms.
+</p>
+
+<div class="card">
+  <div class="row">
+    <span class="label">Previous Loan ID</span>
+    <span class="value">#{{ old_loan_id }}</span>
+  </div>
+  <div class="row">
+    <span class="label">New Loan ID</span>
+    <span class="value">#{{ new_loan_id }}</span>
+  </div>
+  <div class="row">
+    <span class="label">New Principal</span>
+    <span class="value">{{ new_amount }} RWF</span>
+  </div>
+  <div class="row">
+    <span class="label">New Due Date</span>
+    <span class="value">{{ due_date }}</span>
+  </div>
+</div>
+
+<p class="text">
+  Please continue your repayment according to the new schedule.
+</p>
+
+<a href="{{ payment_url }}" class="button">Make a Payment</a>
+
+<p class="footer">
+  If you have any questions, feel free to contact our support team.
+</p>
+
+{% endblock %}

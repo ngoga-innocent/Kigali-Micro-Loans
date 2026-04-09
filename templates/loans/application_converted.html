@@ -1,0 +1,11 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+ <div class="container">
+    <h2 class="converted">Loan Application Approved!</h2>
+    <p>Hi {{ name }},</p>
+    <p>Congratulations! Your loan application of <strong>{{ amount }} RWF</strong> for <strong>{{ loan_type }}</strong> has been <strong>approved</strong> and you are now registered as a client.</p>
+    <p>Access your client dashboard using the credentials you received to view your loan application details and wait to sign the agreements and repayment schedule</p>
+    <p><a href="{{ dashboard_url }}" class="btn">Go to Dashboard</a></p>
+  </div>
+{% endblock %}

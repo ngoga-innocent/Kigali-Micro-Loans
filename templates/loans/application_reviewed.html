@@ -1,0 +1,13 @@
+{% extends "emails/base.html" %} {% block content %}
+<div class="container">
+  <h2 class="reviewed">Loan Application Reviewed</h2>
+  <p>Hi {{ name }},</p>
+  <p>
+    Your loan application of <strong>{{ amount }} RWF</strong> for
+    <strong>{{ loan_type }}</strong> has been <strong>reviewed</strong> by our
+    team.
+  </p>
+  <p>We will notify you about the next steps soon.</p>
+  <p><a href="{{ dashboard_url }}" class="btn">Go to Dashboard</a></p>
+</div>
+{% endblock %}
