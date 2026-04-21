@@ -5,6 +5,11 @@ import random, string
 from users.utils import send_credentials_email
 from loans.models import Loan
 from django.db.models import Sum
+User = get_user_model()
+class UserMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["email", "username", "role"]
 class ClientSerializer(serializers.ModelSerializer):
     total_loans = serializers.IntegerField(read_only=True)
     total_amount = serializers.DecimalField(
@@ -12,19 +17,27 @@ class ClientSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True
     )
+    user_details = UserMiniSerializer(source="user", read_only=True)
 
     class Meta:
         model = Client
         fields = "__all__"
+    def get_user_details(self, obj):
+        if obj.user:
+            return {
+                "email": obj.user.email,
+                "username": obj.user.username,
+                "role": obj.user.role,
+            }
+        return {}
     
 
-User = get_user_model()
 
 class CreateClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         exclude = ["user"]
-
+    user_details = UserMiniSerializer(source="user", read_only=True)
     def generate_password(self):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 

@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.utils.timezone import now
 from datetime import timedelta,date
 
-from backend.loans.management.commands.reloan import process_reloan
+from loans.management.commands.reloan import process_reloan
 from loans.models import Loan
 from users.utils import send_email
 from django.conf import settings
@@ -16,7 +16,7 @@ class Command(BaseCommand):
         today = now().date()
 
         loans = Loan.objects.select_related("client").filter(
-            status__in=["active", "in_payment"]
+            status__in=["active", "in_payment","overdue"]
         )
 
         stats = {
@@ -29,7 +29,7 @@ class Command(BaseCommand):
         for loan in loans:
             due_date = loan.repayment_due_date
             days_left = (due_date - today).days
-
+            print("days remaining",days_left)
             context = {
                 "client_name": loan.client.names,
                 "loan_id": loan.id,
@@ -100,11 +100,11 @@ class Command(BaseCommand):
 
                     penalty_applied = True
 
-                # 📧 Send email ONCE per month (or when penalty applied)
+                # 📧 Send email every day  (or when penalty applied)
                 if (
                     loan.overdue_last_notified is None
-                    or (loan.overdue_last_notified.year, loan.overdue_last_notified.month)
-                    != (today.year, today.month)
+                    or (loan.overdue_last_notified.year, loan.overdue_last_notified.month, loan.overdue_last_notified.day)
+                    != (today.year, today.month, today.day)
                 ):
                     context["penalty"] = f"{loan.penalty_amount:,.0f}"
 
@@ -117,6 +117,7 @@ class Command(BaseCommand):
 
                     loan.overdue_last_notified = today
                     stats["overdue"] += 1
+            
 
             loan.save()
 

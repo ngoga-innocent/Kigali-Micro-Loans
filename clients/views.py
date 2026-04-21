@@ -15,8 +15,9 @@ from django.db.models.functions import Coalesce
 class ClientListCreateView(generics.ListCreateAPIView):
     # queryset = Client.objects.all()
     permission_classes = [IsAuthenticated, IsAdminOrManager]
+    
     def get_queryset(self):
-        return Client.objects.all().annotate(
+        return Client.objects.select_related("user").annotate(
             total_loans=Count("loan"),
             total_amount=Coalesce(
                 Sum("loan__loan_amount"),

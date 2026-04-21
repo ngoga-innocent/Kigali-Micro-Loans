@@ -1,0 +1,9 @@
+{% extends "emails/base.html" %} {% block content %}
+<div class="container">
+    <h2 class="approved">Loan Application has been Approved</h2>
+    <p>Hi {{ name }},</p>
+    <p>Congratulations! Your loan application of <strong>{{ amount }} RWF</strong> for <strong>{{ loan_type }}</strong> has been <strong>approved</strong>.</p>
+    <p>If you have questions regarding this decision, please contact our support team.</p>
+    <p><a href="{{ dashboard_url }}" class="btn">Go to Dashboard</a></p>
+  </div>
+{% endblock %}

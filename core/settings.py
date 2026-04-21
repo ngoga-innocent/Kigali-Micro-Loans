@@ -59,7 +59,8 @@ MIDDLEWARE = [
 ]
 CORS_ALLOW_ALL_ORIGINS = True
 ROOT_URLCONF = 'core.urls'
-
+CORS_ALLOW_HEADERS = ["*"]
+CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -126,7 +127,14 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",   # 🔥 REQUIRED
+    "POST",
+    "PUT",
+]
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/

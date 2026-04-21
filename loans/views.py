@@ -11,7 +11,7 @@ from rest_framework import status
 from django.db.models import Q
 from rest_framework.permissions import AllowAny
 from .models import LoanType
-from .serializers import LoanTypeSerializer,LoanApplicationSerializer,LoanPaymentSerializer,AdminCreateLoanSerializer
+from .serializers import LoanTypeSerializer,LoanApplicationSerializer,LoanPaymentSerializer,AdminCreateLoanSerializer,AdminLoanApplicationSerializer
 from users.permissions import IsAdminOrManager,IsAdminOrManagerOrReadOnlyReviewer
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -33,7 +33,7 @@ from django.utils.dateparse import parse_date
 from clients.serializers import CreateClientSerializer
 from .models import Loan, LoanApplication, LoanPayment, RepaymentSchedule,PublicLoanApplication
 from .serializers import LoanSerializer, LoanPaymentSerializer,PublicLoanApplicationSerializer
-
+import traceback
 from django.contrib.auth import get_user_model
 
 from datetime import timedelta
@@ -405,6 +405,38 @@ class LoanViewSet(ModelViewSet):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class AdminLoanApplicationViewSet(ModelViewSet):
+    queryset = LoanApplication.objects.all().order_by("-created_at")
+    serializer_class = AdminLoanApplicationSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    @action(detail=False, methods=["post"], url_path="create-manual")
+    def create_manual(self, request):
+        try:
+            print("📥 RAW REQUEST DATA:", request.data)
+
+            serializer = self.get_serializer(data=request.data)
+
+            if not serializer.is_valid():
+                print("❌ VALIDATION ERRORS:", serializer.errors)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            print("✅ VALIDATED DATA:", serializer.validated_data)
+
+            application = serializer.save()
+
+            return Response(
+                self.get_serializer(application).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            print("🔥 ERROR:", str(e))
+            traceback.print_exc()
+
+            return Response(
+                {"error": "Something went wrong", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 class LoanApplicationViewSet(ModelViewSet):
     queryset = LoanApplication.objects.all().order_by("-created_at")
     serializer_class = LoanApplicationSerializer
@@ -566,7 +598,7 @@ class LoanApplicationViewSet(ModelViewSet):
 
         # ✅ Interest Calculation
         if interest_type == 'flat':
-            interest = (amount * rate / Decimal("100")) * Decimal(period_value)
+            interest = (amount * rate / Decimal("100"))
         else:
             interest = (amount * rate / Decimal("100"))
 

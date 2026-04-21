@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import Loan,LoanType,LoanApplication,LoanPayment,RepaymentSchedule,PublicLoanApplication,Client
 from clients.serializers import ClientSerializer
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal,ROUND_HALF_UP
 class LoanTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanType
@@ -115,7 +115,11 @@ class AdminCreateLoanSerializer(serializers.ModelSerializer):
         loan_amount = validated_data["loan_amount"]
 
         # ✅ Calculate interest
-        interest_amount = loan_amount * (interest_rate / Decimal("100"))
+        interest_rate_decimal = Decimal(interest_rate) / Decimal("100")
+
+        interest_amount = (
+            loan_amount * interest_rate_decimal
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         # ✅ Total repayment
         total_repayment = loan_amount + interest_amount
@@ -174,6 +178,54 @@ class PublicLoanApplicationSerializer(serializers.ModelSerializer):
         if email and Client.objects.filter(email=email).exists():
             raise serializers.ValidationError(
                 "A client with this email already exists. Please log in to proceed."
+            )
+
+        return data
+class AdminLoanApplicationSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = LoanApplication
+        fields = "__all__"
+        read_only_fields = ["signed_at", "created_at"]
+
+    def validate_client(self, value):
+        if not value:
+            raise serializers.ValidationError("Client is required")
+        return value
+
+    def validate(self, data):
+        client = data.get("client")
+        loan_type = data.get("loan_type")
+        amount = data.get("requested_amount")
+
+        # 🚨 HARD SAFETY CHECK
+        if not client:
+            raise serializers.ValidationError({"client": "Client is required"})
+        if not loan_type:
+            raise serializers.ValidationError({"loan_type": "Loan type is required"})
+        if not amount:
+            raise serializers.ValidationError({"requested_amount": "Amount is required"})
+
+        # convert safely
+        try:
+            amount = float(amount)
+        except:
+            raise serializers.ValidationError({"requested_amount": "Invalid amount"})
+
+        # loan type rules
+        if amount < loan_type.min_amount or amount > loan_type.max_amount:
+            raise serializers.ValidationError(
+                f"Amount must be between {loan_type.min_amount} and {loan_type.max_amount}"
+            )
+
+        # duplicate check
+        if LoanApplication.objects.filter(
+            client=client,
+            loan_type=loan_type,
+            status__in=["pending", "reviewed", "signed"]
+        ).exists():
+            raise serializers.ValidationError(
+                "Client already has active application for this loan type"
             )
 
         return data

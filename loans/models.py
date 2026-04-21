@@ -111,7 +111,7 @@ class Loan(models.Model):
     reminder_5_days_sent = models.BooleanField(default=False)
     reminder_1_day_sent = models.BooleanField(default=False)
     reminder_due_today_sent = models.BooleanField(default=False)
-
+    overdue_last_notified=models.DateField(null=True, blank=True)
     penalty_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     penalty_applied = models.BooleanField(default=False)
     last_penalty_date = models.DateField(null=True, blank=True)  # prevents duplicate daily penalties

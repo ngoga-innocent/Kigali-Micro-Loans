@@ -4,7 +4,9 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
+import logging
 
+logger = logging.getLogger(__name__)
 
 def send_email(
     to_email,
@@ -14,27 +16,38 @@ def send_email(
     text_content=None,
 ):
     """
-    Global email sender
+    Global email sender (safe version)
+    Returns: True if sent, False if failed
     """
 
     context = context or {}
 
-    # Render HTML template
-    html_content = render_to_string(template_name, context)
+    try:
+        # Render HTML template
+        html_content = render_to_string(template_name, context)
 
-    # Optional plain text fallback
-    if not text_content:
-        text_content = "Please view this email in an HTML-supported client."
+        # Optional plain text fallback
+        if not text_content:
+            text_content = "Please view this email in an HTML-supported client."
 
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=text_content,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[to_email],
-    )
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[to_email],
+        )
 
-    msg.attach_alternative(html_content, "text/html")
-    msg.send()
+        msg.attach_alternative(html_content, "text/html")
+
+        msg.send()
+
+        return True
+
+    except Exception as e:
+        logger.error(
+            f"Email failed | to={to_email} | subject={subject} | error={str(e)}"
+        )
+        return False
 def send_credentials_email(email, password):
     subject = "Your Kigali Microloans Account"
 
