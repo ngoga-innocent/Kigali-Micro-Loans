@@ -34,6 +34,7 @@ def process_reloan(loan: Loan):
     )
 
     loan.status = "reloaned"
+    loan.remaining_balance = 0
     loan.save()
 
     # ✅ Send email

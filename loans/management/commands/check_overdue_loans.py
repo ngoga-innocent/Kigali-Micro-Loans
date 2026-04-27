@@ -61,7 +61,7 @@ class Command(BaseCommand):
                 stats["1_day"] += 1
 
             # 🔔 DUE TODAY
-            elif days_left == 0 and not loan.reminder_due_today_sent:
+            elif days_left == -1 and not loan.reminder_due_today_sent:
                 if loan.is_eligible_for_reloan() and loan.status != "reloaned":
                     process_reloan(loan)
                     stats["overdue"] += 1

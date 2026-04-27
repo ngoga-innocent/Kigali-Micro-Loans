@@ -1,3 +1,4 @@
+from email.mime import application
 from django.shortcuts import render
 
 # Create your views here.
@@ -539,8 +540,10 @@ class LoanApplicationViewSet(ModelViewSet):
     @action(detail=True, methods=["post"])
     def sign(self, request, pk=None):
         application = self.get_object()
+        is_staff = request.user.role in ['admin', 'manager']
+        is_owner = hasattr(request.user, "client") and application.client == request.user.client
 
-        if application.client != request.user.client:
+        if not (is_staff or is_owner):
             return Response(
                 {"error": "Not your application"},
                 status=403

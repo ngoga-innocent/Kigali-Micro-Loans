@@ -206,7 +206,7 @@ class PublicLoanApplication(models.Model):
 
     loan_words = models.CharField(max_length=255, blank=True)
 
-    signature = models.CharField(max_length=255)
+    signature = models.CharField(max_length=255,null=True,blank=True)
     application_date = models.DateField(auto_now_add=True)
     id_document = models.FileField(upload_to="documents/id/",null=True,blank=True)
     job_contract = models.FileField(upload_to="documents/job/",null=True,blank=True)

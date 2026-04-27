@@ -3,6 +3,7 @@ from .models import Loan,LoanType,LoanApplication,LoanPayment,RepaymentSchedule,
 from clients.serializers import ClientSerializer
 from datetime import timedelta
 from decimal import Decimal,ROUND_HALF_UP
+from users.serializers import UserSerializer 
 class LoanTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanType
@@ -29,12 +30,14 @@ class LoanTypeSerializer(serializers.ModelSerializer):
 class LoanApplicationSerializer(serializers.ModelSerializer):
     loan_type_details = LoanTypeSerializer(source="loan_type", read_only=True)
     client_data=ClientSerializer(source='client',read_only=True)
+    reviewed_by_data = UserSerializer(source="reviewed_by", read_only=True)
     class Meta:
         model = LoanApplication
         fields = "__all__"
         read_only_fields = [
             "status",
             "reviewed_by",
+            
             "is_signed",
             "signed_at",
             "client",

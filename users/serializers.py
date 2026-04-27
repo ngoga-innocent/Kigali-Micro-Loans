@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 import random, string
+from .models import PasswordResetRequest
 from django.contrib.auth import authenticate
 User = get_user_model()
 from django.contrib.auth.password_validation import validate_password
@@ -114,3 +115,9 @@ class UserSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+class PasswordResetRequestSerializer(serializers.ModelSerializer):
+    email = serializers.CharField(source="user.email")
+
+    class Meta:
+        model = PasswordResetRequest
+        fields = ["id", "email", "status", "created_at"]
