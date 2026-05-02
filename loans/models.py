@@ -85,6 +85,7 @@ class Loan(models.Model):
         ('defaulted', 'Defaulted'),
         ('paid', 'Paid Off'),
         ('reloaned', 'Reloaned'),
+        ('cancelled', 'Cancelled')
     )
 
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
@@ -156,6 +157,7 @@ class LoanPayment(models.Model):
         ("pending", "Pending"),
         ("approved", "Approved"),
         ("rejected", "Rejected"),
+        ("cancelled", "Cancelled"), 
     )
     loan = models.ForeignKey(Loan, on_delete=models.CASCADE, related_name="payments")
     schedule = models.ForeignKey(
@@ -168,7 +170,9 @@ class LoanPayment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
     reference = models.CharField(max_length=100, blank=True)
-
+    cancelled_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,related_name="cancelled_payments")
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True)
     def __str__(self):
         return f"{self.loan} - {self.amount_paid}"
 class PublicLoanApplication(models.Model):

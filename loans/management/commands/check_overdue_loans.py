@@ -60,8 +60,8 @@ class Command(BaseCommand):
                 loan.reminder_1_day_sent = True
                 stats["1_day"] += 1
 
-            # 🔔 DUE TODAY
-            elif days_left == -1 and not loan.reminder_due_today_sent:
+            # 🔔 DUE AFTER GRACE PERIOD
+            elif days_left < 0 and not loan.reminder_due_today_sent:
                 if loan.is_eligible_for_reloan() and loan.status != "reloaned":
                     process_reloan(loan)
                     stats["overdue"] += 1
@@ -84,41 +84,44 @@ class Command(BaseCommand):
 
                 loan_type = loan.loan_type
                 penalty_rate = loan_type.late_payment_penalty_percentage / 100
+                grace_days = loan_type.grace_period_days
+                today = date.today()
 
                 penalty_applied = False
 
-                today = date.today()
+                # how many days overdue
+                overdue_days = (today - due_date).days
 
-                # Apply penalty DAILY (once per day)
-                if loan.last_penalty_date != today:
-                    penalty = loan.remaining_balance * penalty_rate
+                # Apply penalty DAILY after grace period
+                if overdue_days > grace_days:
+                    if loan.last_penalty_date != today:
+                        penalty = loan.remaining_balance * penalty_rate
 
-                    loan.penalty_amount += penalty
-                    loan.remaining_balance += penalty
-                    loan.last_penalty_date = today
-                    loan.save()
+                        loan.penalty_amount += penalty
+                        loan.remaining_balance += penalty
+                        loan.last_penalty_date = today
 
-                    penalty_applied = True
+                        penalty_applied = True
 
-                # 📧 Send email every day  (or when penalty applied)
+                # Send email once per day
                 if (
                     loan.overdue_last_notified is None
-                    or (loan.overdue_last_notified.year, loan.overdue_last_notified.month, loan.overdue_last_notified.day)
-                    != (today.year, today.month, today.day)
+                    or loan.overdue_last_notified != today
                 ):
                     context["penalty"] = f"{loan.penalty_amount:,.0f}"
+                    context["days_overdue"] = overdue_days
 
                     send_email(
                         to_email=loan.client.email,
-                        subject="⚠️ Loan Overdue - Monthly Penalty Applied",
+                        subject="⚠️ Loan Overdue Notice",
                         template_name="loans/loan_overdue.html",
                         context=context,
                     )
 
                     loan.overdue_last_notified = today
                     stats["overdue"] += 1
-            
 
-            loan.save()
+        loan.save()
+            
 
         self.stdout.write(self.style.SUCCESS(f"Done: {stats}"))

@@ -15,7 +15,8 @@ class User(AbstractUser):
     must_change_password = models.BooleanField(default=True)
     username = models.CharField(max_length=150, unique=True)
     email = models.EmailField(unique=True)  
-
+    is_2fa_enabled = models.BooleanField(default=False)
+    otp_secret = models.CharField(max_length=32, blank=True, null=True)
 
 class PasswordResetRequest(models.Model):
     STATUS_CHOICES = [

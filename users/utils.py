@@ -7,7 +7,24 @@ from django.conf import settings
 import logging
 
 logger = logging.getLogger(__name__)
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 
+User = get_user_model()
+
+def get_staff_emails():
+    return list(
+        User.objects.filter(
+            is_active=True,
+            email__isnull=False
+        )
+        .exclude(email="")
+        .filter(
+            Q(is_superuser=True) | Q(role__in=["admin", "manager"])
+        )
+        .values_list("email", flat=True)
+        .distinct()
+    )
 def send_email(
     to_email,
     subject,
@@ -15,18 +32,16 @@ def send_email(
     context=None,
     text_content=None,
 ):
-    """
-    Global email sender (safe version)
-    Returns: True if sent, False if failed
-    """
-
     context = context or {}
 
     try:
-        # Render HTML template
+        # ✅ normalize recipients
+        if isinstance(to_email, str):
+            to_email = [to_email]
+
+        # Render HTML
         html_content = render_to_string(template_name, context)
 
-        # Optional plain text fallback
         if not text_content:
             text_content = "Please view this email in an HTML-supported client."
 
@@ -34,11 +49,10 @@ def send_email(
             subject=subject,
             body=text_content,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[to_email],
+            to=to_email,  # ✅ FIXED
         )
 
         msg.attach_alternative(html_content, "text/html")
-
         msg.send()
 
         return True

@@ -19,6 +19,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.utils.timezone import now
 from .models import LoanApplication, Loan,RepaymentSchedule,LoanPayment
+from django.db import transaction
 from clients.models import Client
 from rest_framework.exceptions import NotFound,ValidationError
 from .utils import calculate_due_date,get_installments
@@ -393,7 +394,7 @@ class CreateLoanView(generics.CreateAPIView):
 class LoanViewSet(ModelViewSet):
     queryset = Loan.objects.all().order_by("-created_at")
     serializer_class = LoanSerializer
-
+    permission_classes = [IsAuthenticated]
     @action(detail=False, methods=["post"], url_path="create-manual")
     def create_manual(self, request):
         serializer = AdminCreateLoanSerializer(data=request.data)
@@ -406,6 +407,36 @@ class LoanViewSet(ModelViewSet):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    @transaction.atomic
+    def partial_update(self, request, *args, **kwargs):
+        loan = self.get_object()
+
+        # 🔒 Permission check
+        if request.user.role not in ["admin", "manager"]:
+            return Response(
+                {"error": "Not authorized to edit loan"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # ⚠️ Prevent dangerous edits
+        # if loan.payments.exists():
+        #     restricted_fields = ["interest_amount"]
+
+        #     for field in restricted_fields:
+        #         if field in request.data:
+        #             raise ValidationError(
+        #                 f"Cannot modify '{field}' after payments exist"
+        #             )
+
+        serializer = self.get_serializer(
+            loan,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data)
 class AdminLoanApplicationViewSet(ModelViewSet):
     queryset = LoanApplication.objects.all().order_by("-created_at")
     serializer_class = AdminLoanApplicationSerializer
@@ -623,6 +654,7 @@ class LoanApplicationViewSet(ModelViewSet):
                     loan_type=loan_type,
                     application=application,
                     loan_amount=amount,
+                    contract=application.signed_contract,
                     remaining_balance=total_repayment,
                     total_repayment=total_repayment,
                     interest_amount=interest,
@@ -662,6 +694,53 @@ class LoanApplicationViewSet(ModelViewSet):
             "message": "Loan created successfully",
             "loan_id": loan.id
         }, status=201)
+    # Edit Application (Admin / Manager only)
+    @action(detail=True, methods=["patch"], permission_classes=[IsAdminOrManager])
+    def edit_application(self, request, pk=None):
+        application = self.get_object()
+
+        if application.status == "rejected":
+            return Response(
+                {"error": "Rejected applications cannot be edited"},
+                status=400
+            )
+
+        data = request.data
+
+        if "requested_amount" in data:
+            application.requested_amount = data["requested_amount"]
+
+        if "loan_type" in data:
+            try:
+                application.loan_type = LoanType.objects.get(
+                    id=data["loan_type"]
+                )
+            except LoanType.DoesNotExist:
+                return Response(
+                    {"error": "Invalid loan type"},
+                    status=400
+                )
+
+        if "comment" in data:
+            application.comment = data["comment"]
+
+        if "status" in data:
+            application.status = data["status"]
+
+        if "is_signed" in data:
+            application.is_signed = True if data["is_signed"] == "true" else False
+
+        if request.FILES.get("contract"):
+            application.contract = request.FILES["contract"]
+
+        if request.FILES.get("signed_contract"):
+            application.signed_contract = request.FILES["signed_contract"]
+
+        application.save()
+
+        return Response({
+            "message": "Application updated successfully"
+        })
 class LoanPaymentViewSet(ModelViewSet):
     queryset = LoanPayment.objects.all().order_by("-payment_date")
     serializer_class = LoanPaymentSerializer
@@ -708,7 +787,85 @@ class LoanPaymentViewSet(ModelViewSet):
             loan=loan,
             status="pending"
         )
+    # UPDATE PAYMENT (Admin / Manager can edit pending payments)
+    
 
+    @action(detail=True, methods=["patch"])
+    def update_payment(self, request, pk=None):
+        user = request.user
+
+        try:
+            payment = LoanPayment.objects.select_related("loan").get(pk=pk)
+        except LoanPayment.DoesNotExist:
+            return Response({"error": "Not found"}, status=404)
+
+        # =========================
+        # PERMISSIONS
+        # =========================
+        if user.role not in ["admin", "manager", "client"]:
+            return Response({"error": "Not allowed"}, status=403)
+
+        if user.role == "client" and payment.loan.user != user:
+            return Response({"error": "Not your payment"}, status=403)
+
+        # =========================
+        # ONLY PENDING
+        # =========================
+        if payment.status != "pending":
+            return Response(
+                {"error": "Only pending payments can be edited"},
+                status=400,
+            )
+
+        with transaction.atomic():
+
+            # update amount
+            if "amount_paid" in request.data:
+                payment.amount_paid = request.data.get("amount_paid")
+
+            # update loan
+            loan_id = request.data.get("loan_id")
+            if loan_id:
+                try:
+                    new_loan = Loan.objects.get(id=loan_id)
+                    payment.loan = new_loan
+                except Loan.DoesNotExist:
+                    return Response({"error": "Invalid loan"}, status=400)
+
+            # update proof
+            if "payment_proof" in request.FILES:
+                payment.payment_proof = request.FILES["payment_proof"]
+
+            payment.save()
+
+        return Response({"success": True})
+    # Cancel Payment (Admin / Manager only)
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminOrManager])
+    def cancel(self, request, pk=None):
+        payment = self.get_object()
+
+        # ❌ Prevent cancelling non-approved payments
+        if payment.status != "approved":
+            return Response(
+                {"error": "Only approved payments can be cancelled"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        loan = payment.loan
+
+        # ✅ Revert loan balance
+        loan.remaining_balance += payment.amount_paid
+        loan.save()
+
+        # ✅ Mark payment as cancelled
+        payment.status = "cancelled"
+        payment.cancelled_by = request.user
+        payment.cancelled_at = timezone.now()
+        payment.cancellation_reason = request.data.get("reason", "")
+        payment.save()
+        
+
+        return Response({"message": "Payment cancelled successfully"})
     # ✅ ADMIN REVIEW (APPROVE / REJECT)
     @action(detail=True, methods=["post"], permission_classes=[IsAdminOrManager])
     def review(self, request, pk=None):

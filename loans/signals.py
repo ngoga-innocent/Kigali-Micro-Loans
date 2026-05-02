@@ -3,7 +3,7 @@
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from django.conf import settings
-
+from users.utils import get_staff_emails
 from .models import Loan, PublicLoanApplication, LoanApplication
 from users.utils import send_email
 
@@ -33,6 +33,20 @@ def loan_post_save_handler(sender, instance, created, **kwargs):
         if client and client.email:
             send_email(
                 to_email=client.email,
+                subject="💰 Loan Disbursed Successfully",
+                template_name="loans/loan_disbursed.html",
+                context={
+                    "client_name": getattr(client, "names", "Client"),
+                    "loan_id": instance.id,
+                    "amount": f"{instance.loan_amount:,.0f}",
+                    "balance": f"{instance.remaining_balance:,.0f}",
+                    "due_date": instance.repayment_due_date,
+                    "dashboard_url": dashboard_url,
+                    "payment_url": payment_url,
+                },
+            )
+            send_email(
+                to_email=get_staff_emails(),
                 subject="💰 Loan Disbursed Successfully",
                 template_name="loans/loan_disbursed.html",
                 context={
@@ -109,6 +123,17 @@ def public_application_handler(sender, instance, created, **kwargs):
                     "dashboard_url": dashboard_url,
                 },
             )
+            send_email(
+                to_email=get_staff_emails(),
+                subject="📩 Loan Application Received",
+                template_name="loans/application_received.html",
+                context={
+                    "name": instance.full_name,
+                    "amount": f"{instance.requested_amount:,.0f}",
+                    "loan_type": instance.loan_type.name if instance.loan_type else "N/A",
+                    "dashboard_url": dashboard_url,
+                },
+            )
         return
 
     # =========================
@@ -130,6 +155,18 @@ def public_application_handler(sender, instance, created, **kwargs):
     if subject and template and instance.email:
         send_email(
             to_email=instance.email,
+            subject=subject,
+            template_name=template,
+            context={
+                "name": instance.full_name,
+                "amount": f"{instance.requested_amount:,.0f}",
+                "loan_type": instance.loan_type.name if instance.loan_type else "N/A",
+                "status": instance.status,
+                "dashboard_url": dashboard_url,
+            },
+        )
+        send_email(
+            to_email=get_staff_emails(),
             subject=subject,
             template_name=template,
             context={

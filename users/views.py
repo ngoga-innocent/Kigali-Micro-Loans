@@ -42,7 +42,57 @@ from django.core.exceptions import PermissionDenied
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.utils.decorators import method_decorator
+import pyotp
+import qrcode
+from io import BytesIO
+import base64
 User = get_user_model()
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def generate_2fa(request):
+    user = request.user
+
+    secret = pyotp.random_base32()
+    user.otp_secret = secret
+    user.save()
+
+    otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+        name=user.email,
+        issuer_name="KIGALI MICROLOANS"
+    )
+
+    qr = qrcode.make(otp_uri)
+    buffer = BytesIO()
+    qr.save(buffer, format="PNG")
+
+    qr_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+    return Response({"qr_code": qr_base64})
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def verify_2fa(request):
+    user = request.user
+    code = request.data.get("code")
+
+    totp = pyotp.TOTP(user.otp_secret)
+
+    if totp.verify(code):
+        user.is_2fa_enabled = True
+        user.save()
+        return JsonResponse({"success": True})
+
+    return JsonResponse({"error": "Invalid code"}, status=400)
+def disable_2fa(request):
+    user = request.user
+    user.is_2fa_enabled = False
+    user.otp_secret = ""
+    user.save()
+    return JsonResponse({"success": True})
 def checktemplates(request):
     return render(request,'emails/credentials.html')
 class LoginView(APIView):
@@ -90,6 +140,7 @@ class LoginView(APIView):
             "access": str(refresh.access_token),
             "refresh": str(refresh),
             "role": user.role,
+            "is_2fa_enabled": user.is_2fa_enabled,
             "must_change_password": user.must_change_password
         })
 
@@ -308,8 +359,7 @@ class AdminPasswordResetView(APIView):
         ]
 
         return Response(data)
-    def patch(self, request, request_id):
-
+    def patch(self, request, request_id, action):
         user = request.user
 
         if user.role not in ["admin", "manager"]:
@@ -323,21 +373,45 @@ class AdminPasswordResetView(APIView):
         if req.status != "PENDING":
             return Response({"error": "Already processed"}, status=400)
 
-        token = str(uuid.uuid4())
-        expiry = timezone.now() + timedelta(minutes=20)
+        if action == "approve":
+            token = str(uuid.uuid4())
+            expiry = timezone.now() + timedelta(minutes=20)
 
-        req.token = token
-        req.status = "APPROVED"
-        req.expires_at = expiry
-        req.save()
-
-        reset_link = f"{settings.FRONTEND_URL}/reset-password/{token}"
-
-        send_mail(
-            "Password Reset Approved",
-            f"Reset your password (valid 20 min): {reset_link}",
-            "info@tresinfra.com",
-            [req.user.email],
-        )
+            req.token = token
+            req.status = "APPROVED"
+            req.expires_at = expiry
             
+
+            reset_link = f"{settings.FRONTEND_URL}/reset-password/{token}"
+
+            try:
+               send_mail(
+                "Password Reset Approved",
+                f"Reset your password (valid 20 min): {reset_link}",
+                "info@tresinfra.com",
+                [req.user.email],
+            )
+               req.save()
+            except Exception as e:
+                logger.error(f"Failed to send password reset email: {str(e)}")
+                return Response({"error": "Failed to send email"}, status=500) 
+
+        elif action == "reject":
+            req.status = "REJECTED"
+            
+            try:
+                    send_mail(
+                    "Password Reset Rejected",
+                    f"Your password reset request has been rejected. If you didn't make this request, please contact support immediately.",
+                    "info@tresinfra.com",
+                    [req.user.email],
+                )
+                    req.save()
+            except Exception as e:
+                logger.error(f"Failed to send password reset email: {str(e)}")
+                return Response({"error": "Failed to send email"}, status=500)
+
+        else:
+            return Response({"error": "Invalid action"}, status=400)
+
         return Response({"success": True})

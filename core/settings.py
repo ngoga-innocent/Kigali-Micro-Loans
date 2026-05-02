@@ -102,9 +102,9 @@ SIMPLE_JWT = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'umuzylvc_KML',
-        'USER': 'umuzylvc_admin',
-        'PASSWORD': 'Ngoga@1patrick',
+        'NAME': 'kigahnxu_kigali_microloans',
+        'USER': 'kigahnxu_admin',
+        'PASSWORD': 'Kigali@1Microloans',
         'HOST': 'localhost',
         'PORT': '3306',
     }

@@ -58,7 +58,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "role", "password"]
+        fields = ["id", "username", "email", "role","is_2fa_enabled", "password"]
 
     # 🔐 secure generator
     def generate_password(self):

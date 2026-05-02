@@ -2,8 +2,10 @@ from rest_framework import serializers
 from .models import Loan,LoanType,LoanApplication,LoanPayment,RepaymentSchedule,PublicLoanApplication,Client
 from clients.serializers import ClientSerializer
 from datetime import timedelta
+from django.utils import timezone
 from decimal import Decimal,ROUND_HALF_UP
 from users.serializers import UserSerializer 
+from rest_framework.exceptions import ValidationError
 class LoanTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanType
@@ -71,10 +73,12 @@ class LoanPaymentSerializer(serializers.ModelSerializer):
         write_only=True
     )
 
-    loan = serializers.StringRelatedField(read_only=True)
+    loan = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = LoanPayment
         fields = "__all__"
+
     def get_loan(self, obj):
         return {
             "id": obj.loan.id,
@@ -96,6 +100,79 @@ class LoanSerializer(serializers.ModelSerializer):
         fields = "__all__"
     def get_total_due(self, obj):
         return obj.total_repayment + obj.penalty_amount
+    def update(self, instance, validated_data):
+        try:
+            old_total = instance.total_repayment
+            old_remaining = instance.remaining_balance
+
+            paid_amount = old_total - old_remaining
+
+            # =========================
+            # UPDATE FIELDS
+            # =========================
+            instance.loan_amount = validated_data.get(
+                "loan_amount",
+                instance.loan_amount
+            )
+
+            instance.interest_amount = validated_data.get(
+                "interest_amount",
+                instance.interest_amount
+            )
+
+            # =========================
+            # RECALCULATE TOTAL
+            # =========================
+            instance.total_repayment = (
+                instance.loan_amount + instance.interest_amount
+            )
+
+            # =========================
+            # RECALCULATE REMAINING
+            # =========================
+            instance.remaining_balance = (
+                instance.total_repayment - paid_amount
+            )
+
+            if instance.remaining_balance < 0:
+                instance.remaining_balance = 0
+
+            # =========================
+            # OTHER FIELDS
+            # =========================
+            instance.repayment_due_date = validated_data.get(
+                "repayment_due_date",
+                instance.repayment_due_date
+            )
+
+            if "contract" in validated_data:
+                instance.contract = validated_data["contract"]
+
+            # =========================
+            # STATUS
+            # =========================
+            today = timezone.now().date()
+
+            if instance.remaining_balance == 0:
+                instance.status = "paid"
+
+            elif instance.remaining_balance > 0 and instance.remaining_balance < instance.total_repayment:
+                instance.status = "in_payment"
+
+            elif instance.repayment_due_date and instance.repayment_due_date < today:
+                instance.status = "overdue"
+
+            else:
+                instance.status = "active"
+
+            instance.save()
+            return instance
+
+        except Exception as e:
+            # 🔥 THIS IS WHAT FIXES YOUR PARSING ERROR
+            raise ValidationError({
+                "detail": str(e)
+            })
 class AdminCreateLoanSerializer(serializers.ModelSerializer):
     interest_rate = serializers.FloatField(write_only=True)
     duration_days = serializers.IntegerField(write_only=True)
