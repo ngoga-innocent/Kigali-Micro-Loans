@@ -334,7 +334,7 @@ def contact_support(request):
                 subject,
                 text_content,
                 from_email,
-                ["ngogainnocent1@gmail.com"],
+                ["ngogainnocent1@gmail.com",settings.ADMIN_EMAIL],
                 headers={"Reply-To": email}
             )
 
@@ -372,12 +372,42 @@ class PasswordResetView(APIView):
         if not user:
             return Response({"success": False, "error": "User not found"}, status=404)
 
-        PasswordResetRequest.objects.create(user=user)
+        try:
+            PasswordResetRequest.objects.create(user=user)
+            subject = f"[Support] New message from {user.full_name}"
 
-        return Response({
-            "success": True,
-            "message": "Request sent. Await admin approval."
-        })
+            context = {
+                "name": user.full_name,
+                "email": email,
+                "message": f'Password Reset Request from Please review the Request {user.full_name}',
+            }
+
+            html_content = render_to_string("emails/contact_support.html", context)
+            text_content = strip_tags(html_content)
+
+            from_email = f"Kigali Microloans Password Reset <{settings.EMAIL_HOST_USER}>"
+
+            msg = EmailMultiAlternatives(
+                subject,
+                text_content,
+                from_email,
+                ["ngogainnocent1@gmail.com",settings.ADMIN_EMAIL],
+                headers={"Reply-To": email}
+            )
+
+            msg.attach_alternative(html_content, "text/html")
+            msg.send(fail_silently=False)
+            return Response({
+                "success": True,
+                "message": "Request sent. Await admin approval."
+            })
+        except Exception as e:
+            print(str(e))
+            
+            return Response({
+                "success":False,
+                "message":str(e)
+            })
 
 
     # =========================
@@ -486,7 +516,7 @@ class AdminPasswordResetView(APIView):
                send_mail(
                 "Password Reset Approved",
                 f"Reset your password (valid 20 min): {reset_link}",
-                "info@tresinfra.com",
+                settings.EMAIL_HOST_USER,
                 [req.user.email],
             )
                req.save()
@@ -501,7 +531,7 @@ class AdminPasswordResetView(APIView):
                     send_mail(
                     "Password Reset Rejected",
                     f"Your password reset request has been rejected. If you didn't make this request, please contact support immediately.",
-                    "info@tresinfra.com",
+                    settings.EMAIL_HOST_USER,
                     [req.user.email],
                 )
                     req.save()

@@ -42,6 +42,7 @@ def loan_post_save_handler(sender, instance, created, **kwargs):
                     "balance": f"{instance.remaining_balance:,.0f}",
                     "due_date": instance.repayment_due_date,
                     "dashboard_url": dashboard_url,
+                    "role":"client",
                     "payment_url": payment_url,
                 },
             )
@@ -56,6 +57,7 @@ def loan_post_save_handler(sender, instance, created, **kwargs):
                     "balance": f"{instance.remaining_balance:,.0f}",
                     "due_date": instance.repayment_due_date,
                     "dashboard_url": dashboard_url,
+                    "role":"staff",
                     "payment_url": payment_url,
                 },
             )
