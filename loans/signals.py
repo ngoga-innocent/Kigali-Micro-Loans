@@ -118,6 +118,7 @@ def public_application_handler(sender, instance, created, **kwargs):
                 template_name="loans/application_received.html",
                 context={
                     "name": instance.full_name,
+                    "role":"client",
                     "amount": f"{instance.requested_amount:,.0f}",
                     "loan_type": instance.loan_type.name if instance.loan_type else "N/A",
                     "dashboard_url": dashboard_url,
@@ -129,6 +130,7 @@ def public_application_handler(sender, instance, created, **kwargs):
                 template_name="loans/application_received.html",
                 context={
                     "name": instance.full_name,
+                    "role":"staff",
                     "amount": f"{instance.requested_amount:,.0f}",
                     "loan_type": instance.loan_type.name if instance.loan_type else "N/A",
                     "dashboard_url": dashboard_url,

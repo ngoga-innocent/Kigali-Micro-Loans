@@ -34,6 +34,9 @@ class CreateUserSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(
             username=validated_data["email"],
             email=validated_data["email"],
+            phone_number=validated_data["phone_number"],
+            full_name=validated_data["full_name"],
+            id_card=validated_data['id_card'],
             password=password,
             role=validated_data.get("role", "client"),
             must_change_password=True
@@ -58,7 +61,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "role","is_2fa_enabled", "password"]
+        fields = ["id", "username", "email", "role","is_2fa_enabled", "password","phone_number","id_card","full_name"]
 
     # 🔐 secure generator
     def generate_password(self):
@@ -93,6 +96,9 @@ class UserSerializer(serializers.ModelSerializer):
                 username=validated_data["username"],
                 email=validated_data["email"],
                 password=password,
+                phone_number=validated_data["phone_number"],
+                full_name=validated_data["full_name"],
+                id_card=validated_data['id_card'],
                 role=validated_data.get("role", "client"),
                 must_change_password=True,
             )
@@ -121,3 +127,40 @@ class PasswordResetRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = PasswordResetRequest
         fields = ["id", "email", "status", "created_at"]
+class MeSerializer(serializers.ModelSerializer):
+    is_profile_complete = serializers.SerializerMethodField()
+    missing_fields = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "phone_number",
+            "full_name",
+            "id_card",
+            "role",
+            "is_2fa_enabled",
+            "must_change_password",
+            "is_profile_complete",
+            "missing_fields",
+        ]
+        read_only_fields = [
+            "role",  # 🔒 prevent privilege escalation
+            "is_2fa_enabled",
+            "must_change_password",
+        ]
+
+    def get_missing_fields(self, obj):
+        missing = []
+        if not obj.phone_number:
+            missing.append("Phone Number")
+        if not obj.full_name:
+            missing.append("Full Names")
+        if not obj.id_card:
+            missing.append("Id Card")
+        return missing
+
+    def get_is_profile_complete(self, obj):
+        return len(self.get_missing_fields(obj)) == 0

@@ -1,12 +1,51 @@
 {% extends "emails/base.html" %}
+
 {% block content %}
-  <div class="container">
-    <h2 class="reviewed">Loan Application Received</h2>
-    <p>Hi {{ name }},</p>
-    <p>We have successfully received your loan application of <strong>{{ amount }} RWF</strong> for <strong>{{ loan_type }}</strong>.</p>
+<div class="container">
+
+  <h2 class="reviewed">Loan Application Received</h2>
+
+  
+
+  {% if role == "client" %}
+    <!-- CLIENT MESSAGE -->
+     <p>Hi {{ name }},</p>
+    <p>
+      We have successfully received your loan application of 
+      <strong>{{ amount }} RWF</strong> for 
+      <strong>{{ loan_type }}</strong>.
+    </p>
+
     <p>Our team will review your application and get back to you shortly.</p>
-    <p>You can track your application progress on your dashboard:</p>
-    <p><a href="{{ dashboard_url }}" class="btn">Go to Dashboard</a></p>
-    <p class="footer">If you did not submit this application, please contact our support immediately.</p>
-  </div>
+
+    <p>You can track your application progress here:</p>
+    <p>
+      <a href="{{ dashboard_url }}" class="btn">Go to Dashboard</a>
+    </p>
+
+    <p class="footer">
+      If you did not submit this application, please contact support immediately.
+    </p>
+
+  {% elif role == "staff" %}
+    <!-- STAFF MESSAGE -->
+    <p>
+      A new loan application has been submitted.
+    </p>
+
+    <p>
+      <strong>Applicant:</strong> {{ name }} <br />
+      <strong>Amount:</strong> {{ amount }} RWF <br />
+      <strong>Loan Type:</strong> {{ loan_type }}
+    </p>
+
+    <p>Please review this application in the admin dashboard:</p>
+
+    <p>
+      <a href="{{ dashboard_url }}" class="btn">Review Application</a>
+    </p>
+
+  {% endif %}
+
+</div>
 {% endblock %}

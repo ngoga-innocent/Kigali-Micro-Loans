@@ -12,6 +12,9 @@ class User(AbstractUser):
     )
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='client')
+    full_name=models.CharField(max_length=255,null=True,blank=True)
+    phone_number=models.CharField(max_length=14,null=True,blank=True)
+    id_card=models.FileField(upload_to='users_id/',null=True,blank=True)
     must_change_password = models.BooleanField(default=True)
     username = models.CharField(max_length=150, unique=True)
     email = models.EmailField(unique=True)  

@@ -46,10 +46,77 @@ import pyotp
 import qrcode
 from io import BytesIO
 import base64
+import random
 User = get_user_model()
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+import random
+from django.core.cache import cache
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.utils import timezone
+from datetime import timedelta
+from .utils import send_email
+from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.permissions import IsAuthenticated
+from .serializers import MeSerializer
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_email_otp(request):
+    try:
+        user = request.user
+
+    # 🔒 rate limit (important)
+        cache_key_limit = f"email_otp_limit_{user.id}"
+        if cache.get(cache_key_limit):
+            return Response(
+                {"success": False, "error": "Please wait before requesting another code"},
+                status=429
+            )
+
+        # generate OTP
+        otp = str(random.randint(100000, 999999))
+        print(f"Generated OTP for user {user.id}:", otp)
+        # store OTP (15 min)
+        cache.set(f"email_otp_{user.id}", otp, timeout=900)
+
+        # rate limit: 60 seconds cooldown
+        cache.set(cache_key_limit, True, timeout=60)
+
+        # expiry time (for email display)
+        expiry_time = (timezone.now() + timedelta(minutes=15)).strftime("%H:%M")
+
+        # 📧 send using your utility
+        sent = send_email(
+            to_email=user.email,
+            subject="Your KML Verification Code",
+            template_name="emails/otp.html",
+            context={
+                "user": user,
+                "otp": otp,
+                "expiry_time": expiry_time,
+                "app_name": "Kigali Microloans",
+            },
+            text_content=f"Your OTP code is {otp}. It expires in 15 minutes."
+        )
+
+        if not sent:
+            return Response(
+                {"success": False, "error": "Failed to send email"},
+                status=500
+            )
+
+        return Response({"success": True})
+    except Exception as e:
+        print(str(e))
+        return Response(
+            {"success": False, "error": str(e)},
+            status=500
+        )
+        
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -78,15 +145,46 @@ def generate_2fa(request):
 def verify_2fa(request):
     user = request.user
     code = request.data.get("code")
+    method = request.data.get("method", "app")  # default to authenticator
+    print("Verification method:", method)
+    if not code:
+        return JsonResponse({"error": "Code is required"}, status=400)
 
-    totp = pyotp.TOTP(user.otp_secret)
+    is_valid = False
 
-    if totp.verify(code):
-        user.is_2fa_enabled = True
-        user.save()
-        return JsonResponse({"success": True})
+    # 🔐 AUTHENTICATOR (TOTP)
+    if method == "app":
+        if not user.otp_secret:
+            return JsonResponse({"error": "2FA not configured"}, status=400)
 
-    return JsonResponse({"error": "Invalid code"}, status=400)
+        totp = pyotp.TOTP(user.otp_secret)
+        is_valid = totp.verify(code)
+
+    # 📧 EMAIL OTP
+    elif method == "email":
+        cached_otp = cache.get(f"email_otp_{user.id}")
+        print(f"Cached OTP for user {user.id}:", cached_otp)
+        if cached_otp and cached_otp == code:
+            is_valid = True
+            cache.delete(f"email_otp_{user.id}")  # 🔥 invalidate after use
+
+    else:
+        return JsonResponse({"error": "Invalid verification method"}, status=400)
+
+    # ❌ INVALID
+    if not is_valid:
+        return JsonResponse({"error": "Invalid code"}, status=400)
+
+    # ✅ SUCCESS → issue real token
+    refresh = RefreshToken.for_user(user)
+
+    return JsonResponse({
+        "success": True,
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+    })
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def disable_2fa(request):
     user = request.user
     user.is_2fa_enabled = False
@@ -415,3 +513,23 @@ class AdminPasswordResetView(APIView):
             return Response({"error": "Invalid action"}, status=400)
 
         return Response({"success": True})
+class MeView(RetrieveUpdateAPIView):
+    serializer_class = MeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+    def update(self, request, *args, **kwargs):
+        if request.user.role == "client":
+            raise PermissionDenied("Only Staff member can update their profile.")
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if request.user.role == "client":
+            raise PermissionDenied("Only Staff Member can update their profile.")
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role == "client":
+            raise PermissionDenied("Only Staff Member can delete their account.")
+        return super().destroy(request, *args, **kwargs)
