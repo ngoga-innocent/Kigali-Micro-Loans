@@ -121,7 +121,7 @@ class Command(BaseCommand):
                     loan.overdue_last_notified = today
                     stats["overdue"] += 1
 
-        loan.save()
+            loan.save()
             
 
         self.stdout.write(self.style.SUCCESS(f"Done: {stats}"))

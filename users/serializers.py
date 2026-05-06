@@ -69,18 +69,41 @@ class UserSerializer(serializers.ModelSerializer):
 
     # ✅ basic validation
     def validate(self, data):
+        if self.instance and self.partial:
+            return data
+
         if not data.get("username"):
             raise serializers.ValidationError({"username": "Username is required"})
         if not data.get("email"):
             raise serializers.ValidationError({"email": "Email is required"})
+
         return data
 
     # 🔒 prevent role abuse
     def validate_role(self, value):
         request = self.context.get("request")
-        if request and request.user.role != "admin":
-            raise serializers.ValidationError("Only admin can assign roles")
-        return value
+
+        if not request:
+            return value
+
+        user = request.user
+
+        # 🟢 Admin → can assign any role
+        if user.role == "admin":
+            return value
+
+        # 🟡 Manager → limited roles
+        if user.role == "manager":
+            if value not in ["client", "reviewer"]:
+                raise serializers.ValidationError(
+                    "Managers can only assign client or reviewer roles"
+                )
+            return value
+
+        # 🔴 Others → no role assignment allowed
+        raise serializers.ValidationError(
+            "You are not allowed to assign roles"
+        )
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
