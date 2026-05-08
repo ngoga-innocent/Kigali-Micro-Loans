@@ -38,7 +38,7 @@ from .serializers import LoanSerializer, LoanPaymentSerializer,PublicLoanApplica
 import traceback
 from django.contrib.auth import get_user_model
 
-import pandas as pd
+from openpyxl import load_workbook
 from datetime import timedelta
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -1168,19 +1168,20 @@ class PastLoanSheetListCreateView(
         file = self.request.FILES.get("file")
 
         # deactivate old active sheet
-        PastLoanSheet.objects.filter(
-            is_active=True
-        ).update(is_active=False)
+        PastLoanSheet.objects.filter(is_active=True).update(is_active=False)
 
         instance = serializer.save(
             uploaded_by=self.request.user,
             is_active=True
         )
 
-        # read excel rows count
-        df = pd.read_excel(file)
+        # ✅ openpyxl instead of pandas
+        workbook = load_workbook(file, data_only=True)
+        sheet = workbook.active
 
-        instance.row_count = len(df)
+        row_count = sheet.max_row - 1  # exclude header
+
+        instance.row_count = row_count
         instance.save()
 class PastLoanSheetDetailView(
     generics.RetrieveDestroyAPIView
@@ -1195,11 +1196,29 @@ class PastLoanSheetDataView(APIView):
         try:
             sheet = PastLoanSheet.objects.get(pk=pk)
 
-            df = pd.read_excel(sheet.file.path)
-            df = df.fillna("")
+            workbook = load_workbook(sheet.file.path, data_only=True)
+            worksheet = workbook.active
 
-            columns = list(df.columns)
-            data = df.to_dict(orient="records")
+            rows = list(worksheet.iter_rows(values_only=True))
+
+            if not rows:
+                return Response({
+                    "sheet": {
+                        "id": sheet.id,
+                        "title": sheet.title,
+                        "is_active": sheet.is_active,
+                        "row_count": sheet.row_count,
+                        "uploaded_at": sheet.uploaded_at,
+                    },
+                    "columns": [],
+                    "data": []
+                })
+
+            columns = list(rows[0])
+            data = [
+                dict(zip(columns, row))
+                for row in rows[1:]
+            ]
 
             return Response({
                 "sheet": {

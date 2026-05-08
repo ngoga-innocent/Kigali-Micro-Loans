@@ -6,7 +6,9 @@ django-jazzmin==3.0.4
 djangorestframework==3.17.0
 djangorestframework_simplejwt==5.5.1
 drf-yasg==1.21.15
+et_xmlfile==2.0.0
 inflection==0.5.1
+openpyxl==3.1.5
 packaging==26.0
 pillow==12.1.1
 PyJWT==2.12.1
