@@ -20,7 +20,7 @@ def get_staff_emails():
         )
         .exclude(email="")
         .filter(
-            Q(is_superuser=True) | Q(role__in=["admin", "manager"])
+            Q(is_superuser=True) | Q(role__in=["manager"])
         )
         .values_list("email", flat=True)
         .distinct()

@@ -12,7 +12,7 @@ from rest_framework import status
 from django.db.models import Q
 from rest_framework.permissions import AllowAny
 from .models import LoanType
-from .serializers import LoanTypeSerializer,LoanApplicationSerializer,LoanPaymentSerializer,AdminCreateLoanSerializer,AdminLoanApplicationSerializer
+from .serializers import LoanTypeSerializer,LoanApplicationSerializer,LoanPaymentSerializer,AdminCreateLoanSerializer,AdminLoanApplicationSerializer,PastLoanSheetSerializer
 from users.permissions import IsAdminOrManager,IsAdminOrManagerOrReadOnlyReviewer
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -38,6 +38,7 @@ from .serializers import LoanSerializer, LoanPaymentSerializer,PublicLoanApplica
 import traceback
 from django.contrib.auth import get_user_model
 
+import pandas as pd
 from datetime import timedelta
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -49,6 +50,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.http import HttpResponse
 from rest_framework.decorators import action
 import mimetypes
+from .models import PastLoanSheet
+from .serializers import PastLoanSheetSerializer
 
 
 User=get_user_model()
@@ -1154,3 +1157,86 @@ class AdminPublicLoanApplicationViewSet(ModelViewSet):
             response["Content-Disposition"] = f'inline; filename="{file.name}"'
 
             return response
+class PastLoanSheetListCreateView(
+    generics.ListCreateAPIView
+):
+    queryset = PastLoanSheet.objects.all()
+    serializer_class = PastLoanSheetSerializer
+    permission_classes = [IsAdminOrManager]
+
+    def perform_create(self, serializer):
+        file = self.request.FILES.get("file")
+
+        # deactivate old active sheet
+        PastLoanSheet.objects.filter(
+            is_active=True
+        ).update(is_active=False)
+
+        instance = serializer.save(
+            uploaded_by=self.request.user,
+            is_active=True
+        )
+
+        # read excel rows count
+        df = pd.read_excel(file)
+
+        instance.row_count = len(df)
+        instance.save()
+class PastLoanSheetDetailView(
+    generics.RetrieveDestroyAPIView
+):
+    queryset = PastLoanSheet.objects.all()
+    serializer_class = PastLoanSheetSerializer
+    permission_classes = [IsAdminOrManager]
+class PastLoanSheetDataView(APIView):
+    permission_classes = [IsAdminOrManager]
+
+    def get(self, request, pk):
+        try:
+            sheet = PastLoanSheet.objects.get(pk=pk)
+
+            df = pd.read_excel(sheet.file.path)
+            df = df.fillna("")
+
+            columns = list(df.columns)
+            data = df.to_dict(orient="records")
+
+            return Response({
+                "sheet": {
+                    "id": sheet.id,
+                    "title": sheet.title,
+                    "is_active": sheet.is_active,
+                    "row_count": sheet.row_count,
+                    "uploaded_at": sheet.uploaded_at,
+                },
+                "columns": columns,
+                "data": data,
+            })
+
+        except PastLoanSheet.DoesNotExist:
+            return Response(
+                {"error": "Sheet not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+class SetActivePastLoanSheetView(APIView):
+    permission_classes = [IsAdminOrManager]
+
+    def patch(self, request, pk):
+        PastLoanSheet.objects.update(
+            is_active=False
+        )
+
+        sheet = PastLoanSheet.objects.get(pk=pk)
+
+        sheet.is_active = True
+        sheet.save()
+
+        return Response({
+            "message": "Active sheet updated"
+        })

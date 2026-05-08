@@ -29,6 +29,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -186,7 +187,91 @@ EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
 # EMAIL_HOST_USER = 'housemajorrwanda@gmail.com'
 EMAIL_HOST_USER='info@kigalimicroloans.com'
-ADMIN_EMAIL='ngogainnocent1@gmail.com'
+ADMIN_EMAIL='elyseendayishimye@gmail.com'
+SUPPORT_EMAIL='support@kigalimicroloans.com'
 # EMAIL_HOST_PASSWORD = 'kpxr khxv wjoy hprg'  # NOT your Gmail password!
 EMAIL_HOST_PASSWORD = 'Kigali@1Microloans'  # NOT your Gmail password!
 DEFAULT_FROM_EMAIL = 'Kigali Microloans <info@kigalimicroloans.com>'
+
+JAZZMIN_SETTINGS = {
+    # title of the window (Will default to current_admin_site.site_title if absent or None)
+    "site_title": "Kigali Microloans",
+
+    # Title on the login screen (19 chars max) (defaults to current_admin_site.site_header if absent or None)
+    "site_header": "KML",
+
+    # Title on the brand (19 chars max) (defaults to current_admin_site.site_header if absent or None)
+    "site_brand": "KML",
+
+    # Logo to use for your site, must be present in static files, used for brand on top left
+    
+
+    
+
+    # Welcome text on the login screen
+    "welcome_sign": "Welcome to Kigali Microloans Admin Panel",
+
+    # Copyright on the footer
+    "copyright": "KML",
+
+    # List of model admins to search from the search bar, search bar omitted if excluded
+    # If you want to use a single search field you dont need to use a list, you can use a simple string 
+    "search_model": ["auth.User", "auth.Group"],
+
+    # Field name on user model that contains avatar ImageField/URLField/Charfield or a callable that receives the user
+    "user_avatar": None,
+
+    ############
+    # Top Menu #
+    ############
+
+    # Links to put along the top menu
+    
+
+    #############
+    # User Menu #
+    #############
+
+    
+    
+    # Icons that are used when one is not manually specified
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "default_icon_children": "fas fa-circle",
+
+    #################
+    # Related Modal #
+    #################
+    # Use modals instead of popups
+    "related_modal_active": False,
+
+    #############
+    # UI Tweaks #
+    #############
+    # Relative paths to custom CSS/JS scripts (must be present in static files)
+    "custom_css": None,
+    "custom_js": None,
+    # Whether to link font from fonts.googleapis.com (use custom_css to supply font otherwise)
+    "use_google_fonts_cdn": True,
+    # Whether to show the UI customizer on the sidebar
+    "show_ui_builder": False,
+
+    ###############
+    # Change view #
+    ###############
+    # Render out the change view as a single form, or in tabs, current options are
+    # - single
+    # - horizontal_tabs (default)
+    # - vertical_tabs
+    # - collapsible
+    # - carousel
+    "changeform_format": "horizontal_tabs",
+    # override change forms on a per modeladmin basis
+    "changeform_format_overrides": {"auth.user": "collapsible", "auth.group": "vertical_tabs"},
+    # Add a language dropdown into the admin
+    # "language_chooser": True,
+}
+JAZZMIN_UI_TWEAKS = {
+    
+    "theme": "flatly",
+    # "dark_mode_theme": "darkly",
+}

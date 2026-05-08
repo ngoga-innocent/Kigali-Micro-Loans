@@ -17,3 +17,32 @@ urlpatterns += [
     path("create/", CreateLoanView.as_view()),
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
 ]
+
+from .views import (
+    PastLoanSheetListCreateView,
+    PastLoanSheetDetailView,
+    PastLoanSheetDataView,
+    SetActivePastLoanSheetView,
+)
+
+urlpatterns += [
+    path(
+        "past-loan-sheets/",
+        PastLoanSheetListCreateView.as_view(),
+    ),
+
+    path(
+        "past-loan-sheets/<int:pk>/",
+        PastLoanSheetDetailView.as_view(),
+    ),
+
+    path(
+        "past-loan-sheets/<int:pk>/data/",
+        PastLoanSheetDataView.as_view(),
+    ),
+
+    path(
+        "past-loan-sheets/<int:pk>/set-active/",
+        SetActivePastLoanSheetView.as_view(),
+    ),
+]

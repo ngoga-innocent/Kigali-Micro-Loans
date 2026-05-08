@@ -144,44 +144,69 @@ def generate_2fa(request):
 @permission_classes([IsAuthenticated])
 def verify_2fa(request):
     user = request.user
-    code = request.data.get("code")
-    method = request.data.get("method", "app")  # default to authenticator
-    print("Verification method:", method)
+
+    code = str(request.data.get("code", "")).strip()
+    method = request.data.get("method", "app")
+
     if not code:
-        return JsonResponse({"error": "Code is required"}, status=400)
+        return JsonResponse(
+            {"error": "Verification code is required"},
+            status=400,
+        )
 
     is_valid = False
 
-    # 🔐 AUTHENTICATOR (TOTP)
+    # 🔐 AUTHENTICATOR APP (TOTP)
     if method == "app":
         if not user.otp_secret:
-            return JsonResponse({"error": "2FA not configured"}, status=400)
+            return JsonResponse(
+                {"error": "Authenticator app is not configured"},
+                status=400,
+            )
 
         totp = pyotp.TOTP(user.otp_secret)
-        is_valid = totp.verify(code)
+
+        # allow slight clock drift
+        is_valid = totp.verify(code, valid_window=1)
 
     # 📧 EMAIL OTP
     elif method == "email":
-        cached_otp = cache.get(f"email_otp_{user.id}")
-        print(f"Cached OTP for user {user.id}:", cached_otp)
-        if cached_otp and cached_otp == code:
+        cache_key = f"email_otp_{user.id}"
+
+        cached_otp = cache.get(cache_key)
+
+        if cached_otp and str(cached_otp) == code:
             is_valid = True
-            cache.delete(f"email_otp_{user.id}")  # 🔥 invalidate after use
+
+            # 🔥 OTP can only be used once
+            cache.delete(cache_key)
 
     else:
-        return JsonResponse({"error": "Invalid verification method"}, status=400)
+        return JsonResponse(
+            {"error": "Invalid verification method"},
+            status=400,
+        )
 
-    # ❌ INVALID
+    # ❌ INVALID CODE
     if not is_valid:
-        return JsonResponse({"error": "Invalid code"}, status=400)
+        return JsonResponse(
+            {"error": "Invalid or expired verification code"},
+            status=400,
+        )
 
-    # ✅ SUCCESS → issue real token
+    # ✅ ENABLE 2FA AFTER FIRST SUCCESSFUL VERIFICATION
+    if not user.is_2fa_enabled:
+        user.is_2fa_enabled = True
+        user.save(update_fields=["is_2fa_enabled"])
+
+    # ✅ ISSUE JWT TOKENS
     refresh = RefreshToken.for_user(user)
 
     return JsonResponse({
         "success": True,
         "access": str(refresh.access_token),
         "refresh": str(refresh),
+        "message": "2FA verification successful",
     })
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -334,7 +359,7 @@ def contact_support(request):
                 subject,
                 text_content,
                 from_email,
-                ["ngogainnocent1@gmail.com",settings.ADMIN_EMAIL],
+                [settings.SUPPORT_EMAIL],
                 headers={"Reply-To": email}
             )
 

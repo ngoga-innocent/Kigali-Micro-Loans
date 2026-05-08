@@ -5,3 +5,5 @@ admin.site.register(Loan)
 admin.site.register(LoanApplication)
 admin.site.register(LoanPayment)
 admin.site.register(RepaymentSchedule)
+
+

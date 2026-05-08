@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Loan,LoanType,LoanApplication,LoanPayment,RepaymentSchedule,PublicLoanApplication,Client
+from .models import Loan,LoanType,LoanApplication,LoanPayment,RepaymentSchedule,PublicLoanApplication,Client,PastLoanSheet
 from clients.serializers import ClientSerializer
 from datetime import timedelta
 from django.utils import timezone
@@ -309,3 +309,20 @@ class AdminLoanApplicationSerializer(serializers.ModelSerializer):
             )
 
         return data
+
+
+
+class PastLoanSheetSerializer(serializers.ModelSerializer):
+    uploaded_by = serializers.StringRelatedField()
+
+    class Meta:
+        model = PastLoanSheet
+        fields = [
+            "id",
+            "title",
+            "file",
+            "uploaded_by",
+            "is_active",
+            "row_count",
+            "uploaded_at",
+        ]

@@ -224,3 +224,36 @@ class PublicLoanApplication(models.Model):
 
     def __str__(self):
         return f"{self.full_name} - {self.requested_amount}"
+
+
+
+
+
+
+class PastLoanSheet(models.Model):
+    title = models.CharField(max_length=255)
+
+    file = models.FileField(
+        upload_to="past_loan_sheets/"
+    )
+
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    is_active = models.BooleanField(default=False)
+
+    row_count = models.PositiveIntegerField(default=0)
+
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return self.title

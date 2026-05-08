@@ -206,6 +206,19 @@ def loan_application_handler(sender, instance, created, **kwargs):
                 template_name="loans/application_received.html",
                 context={
                     "name": client.names,
+                    "role":"client",
+                    "amount": f"{instance.requested_amount:,.0f}",
+                    "loan_type": instance.loan_type.name if instance.loan_type else "N/A",
+                    "dashboard_url": dashboard_url,
+                },
+            )
+            send_email(
+                to_email=get_staff_emails(),
+                subject="📩 Loan Application Received",
+                template_name="loans/application_received.html",
+                context={
+                    "name": client.names,
+                    "role":"staff",
                     "amount": f"{instance.requested_amount:,.0f}",
                     "loan_type": instance.loan_type.name if instance.loan_type else "N/A",
                     "dashboard_url": dashboard_url,

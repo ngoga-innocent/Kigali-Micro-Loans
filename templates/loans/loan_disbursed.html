@@ -5,9 +5,12 @@
 
 <div class="title">Loan Disbursed Successfully</div>
 
-<p class="text">
+{% if role ==='client' %}<p class="text">
   Congratulations {{ client_name }}, your loan has been successfully disbursed.
 </p>
+{% elif role ==='staff' %}
+New Loan of {{ client_name }} is Created
+{% endif %}
 
 <div class="card">
   <div class="row">
