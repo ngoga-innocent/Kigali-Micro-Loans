@@ -37,7 +37,7 @@ from .models import Loan, LoanApplication, LoanPayment, RepaymentSchedule,Public
 from .serializers import LoanSerializer, LoanPaymentSerializer,PublicLoanApplicationSerializer
 import traceback
 from django.contrib.auth import get_user_model
-
+from django.core.mail import send_mail
 from openpyxl import load_workbook
 from datetime import timedelta
 from django.utils import timezone
@@ -567,6 +567,34 @@ class LoanApplicationViewSet(ModelViewSet):
 
         application.contract = contract
         application.save()
+        try:
+            client_email = application.client.email  # adjust if your relation is different
+
+            send_mail(
+                subject="Your Loan Contract Has Been Sent",
+                message=f"""
+                Dear {application.client_names},
+
+                Your loan contract has been prepared and is now available.
+
+                Please check your account or contact us if you need assistance.
+
+                Thank you,
+                Kigali MicroLoans Team
+                            """,
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[client_email],
+                            fail_silently=False,
+                        )
+
+        except Exception as e:
+            # don't break upload if email fails
+            print("Email sending failed:", str(e))
+
+        return Response({
+            "message": "Contract uploaded and email sent successfully"
+        })
+        
 
         return Response({"message": "Contract uploaded successfully"})
 
@@ -628,27 +656,20 @@ class LoanApplicationViewSet(ModelViewSet):
 
         amount = Decimal(application.requested_amount)
         rate = Decimal(loan_type.interest_rate)
-        period_value = loan_type.repayment_period_value
-        period_unit = loan_type.repayment_period_unit
-        frequency =  loan_type.repayment_frequency
         interest_type = loan_type.interest_type
 
-        # ✅ Interest Calculation
-        if interest_type == 'flat':
-            interest = (amount * rate / Decimal("100"))
-        else:
-            interest = (amount * rate / Decimal("100"))
+        # ✅ Interest Calculation (simplified)
+        interest = (amount * rate / Decimal("100"))
 
         disbursement_date = now().date()
-        due_date = calculate_due_date(disbursement_date, period_value, period_unit)
+        due_date = calculate_due_date(
+            disbursement_date,
+            loan_type.repayment_period_value,
+            loan_type.repayment_period_unit
+        )
 
-        installments = get_installments(period_value,period_unit, frequency)
-
-        principal_per_installment = (amount / installments).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        interest_per_installment = (interest / installments).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-        current_date = disbursement_date
         total_repayment = amount + interest
+
         try:
             with transaction.atomic():
 
@@ -666,26 +687,29 @@ class LoanApplicationViewSet(ModelViewSet):
                     status="active",
                 )
 
-                for i in range(1, installments + 1):
-
-                    if frequency == "daily":
-                        current_date += timedelta(days=1)
-                    elif frequency == "weekly":
-                        current_date += timedelta(weeks=1)
-                    elif frequency == "monthly":
-                        current_date += relativedelta(months=1)
-
-                    RepaymentSchedule.objects.create(
-                        loan=loan,
-                        installment_number=i,
-                        due_date=current_date,
-                        principal_amount=principal_per_installment,
-                        interest_amount=interest_per_installment,
-                        total_amount=principal_per_installment + interest_per_installment,
-                    )
-
                 application.status = "approved"
-                application.save()
+                application.save(update_fields=["status"])
+                try:
+                    send_mail(
+                    subject="Your Loan Has been approved",
+                    message=f"""
+                    Dear {application.client_names},
+
+                    Your loan  has been approved and is now active.
+
+                    Please check your account or contact us if you need assistance.
+
+                    Thank you,
+                    Kigali MicroLoans Team
+                                """,
+                                from_email=settings.DEFAULT_FROM_EMAIL,
+                                recipient_list=[application.client.email],
+                                fail_silently=False,
+                            )
+
+                except Exception as e:
+                    # don't break upload if email fails
+                    print("Email sending failed:", str(e))
 
         except Exception as e:
             return Response(
@@ -702,7 +726,7 @@ class LoanApplicationViewSet(ModelViewSet):
     def edit_application(self, request, pk=None):
         application = self.get_object()
 
-        if application.status == "rejected":
+        if application.status in ["rejected","approved"]:
             return Response(
                 {"error": "Rejected applications cannot be edited"},
                 status=400

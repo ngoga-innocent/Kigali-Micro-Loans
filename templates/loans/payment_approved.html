@@ -1,0 +1,33 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+
+<div class="container">
+    <h2 class="approved">Payment Approved</h2>
+<p>Hi {{ client_name }},</p>
+
+<p>
+    Your payment of <strong>{{ amount_paid }} RWF</strong>
+    for Loan <strong>#{{ loan_id }}</strong>
+    has been <strong>approved</strong>.
+</p>
+
+{% if reference %}
+<p>
+    Payment Reference: <strong>{{ reference }}</strong>
+</p>
+{% endif %}
+
+<p>
+    Thank you for keeping up with your loan repayments.
+</p>
+
+<p>
+    <a href="{{ payment_url }}" class="btn">
+        View Payment Status
+    </a>
+</p>
+
+
+</div>
+{% endblock %}

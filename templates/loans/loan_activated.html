@@ -1,0 +1,40 @@
+<!-- templates/emails/loan_disbursed.html -->
+{% extends "emails/base.html" %}
+
+{% block content %}
+
+<div class="title">Loan Disbursed Successfully</div>
+
+{% if role ==='client' %}<p class="text">
+  Congratulations {{ client_name }}, your loan is in Payment mode.
+</p>
+{% elif role ==='staff' %}
+New Loan of {{ client_name }} is updated to in Payment mode
+{% endif %}
+
+<div class="card">
+  <div class="row">
+    <span class="label">Loan ID:</span>
+    <span class="value"> #{{ loan_id }}</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Amount:</span>
+    <span class="value"> {{ amount }} RWF</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Repayment Due:</span>
+    <span class="value"> {{ due_date }}</span>
+  </div>
+</div>
+
+<p class="text">
+  Please ensure timely repayment to build your credit history.
+</p>
+
+<a href="{{ dashboard_url }}" class="button">
+  View Loan
+</a>
+
+{% endblock %}

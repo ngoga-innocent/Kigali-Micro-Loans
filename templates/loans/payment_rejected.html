@@ -1,0 +1,38 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+
+<div class="container">
+    <h2 class="danger">Payment Rejected</h2>
+
+<p>Hi {{ client_name }},</p>
+
+<p>
+    Your payment of <strong>{{ amount_paid }} RWF</strong>
+    for Loan <strong>#{{ loan_id }}</strong>
+    has been <strong>rejected</strong>.
+</p>
+
+{% if reference %}
+<p>
+    Payment Reference: <strong>{{ reference }}</strong>
+</p>
+{% endif %}
+
+<p>
+    Please review your payment details and submit the payment again if necessary.
+</p>
+
+<p>
+    If you believe this was a mistake, please contact our support team.
+</p>
+
+<p>
+    <a href="{{ payment_url }}" class="btn">
+        Submit Another Payment
+    </a>
+</p>
+
+
+</div>
+{% endblock %}

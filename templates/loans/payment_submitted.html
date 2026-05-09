@@ -1,0 +1,47 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+
+<div class="container">
+    <h2 class="approved">Payment Submitted Successfully</h2>
+
+
+<p>
+    Hi {% if role == "staff" %}Team{% else %}{{ client_name }}{% endif %},
+</p>
+
+<p>
+    A payment of <strong>{{ amount_paid }} RWF</strong> has been submitted
+    for Loan <strong>#{{ loan_id }}</strong>.
+</p>
+
+{% if reference %}
+<p>
+    Payment Reference: <strong>{{ reference }}</strong>
+</p>
+{% endif %}
+
+<p>
+    Payment Date: <strong>{{ payment_date }}</strong>
+</p>
+
+{% if role == "staff" %}
+<p>
+    Please review and approve or reject the payment from the dashboard.
+</p>
+{% else %}
+<p>
+    Your payment is currently under review. You will receive another
+    notification once it has been processed.
+</p>
+{% endif %}
+
+<p>
+    <a href="{{ payment_url }}" class="btn">
+        View Payments
+    </a>
+</p>
+
+
+</div>
+{% endblock %}
